@@ -1,194 +1,144 @@
 <!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<title>単語帳（検索 + ソート + 編集 + 削除 + Count）</title>
-</head>
+<html>
 <body>
 
-<h1>単語帳</h1>
+<h2 id="word">Tap</h2>
+<p id="mean"></p>
+<p id="lumina"></p>
 
-<!-- 入力 -->
-<input type="text" id="word" placeholder="単語">
-<input type="text" id="mean" placeholder="意味">
-<button id="saveBtn">Save</button>
-<button id="nextBtn">Next</button>
-
-<!-- 検索 -->
-<div style="margin-top:10px;">
-    <input type="text" id="search" placeholder="検索...">
-    <button id="sortWordBtn">単語順</button>
-    <button id="sortMeanBtn">意味順</button>
-</div>
-
-<!-- 一覧表示 -->
-<div id="list" style="margin-top:10px;"></div>
-<!-- 総件数表示 -->
-<div id="count" style="margin-top:5px;"></div>
+<button onclick="next()">Next</button>
+<button onclick="save()">Save</button>
+<button onclick="correct()">Correct</button>
+<button onclick="incorrect()">Incorrect</button>
 
 <script>
 let db;
-let sortKey = null; // 'word' or 'mean'
-let sortAsc = true; // 昇順／降順
 
-// DB初期化
-const request = indexedDB.open("mydb", 1);
-request.onupgradeneeded = function(e){
-    db = e.target.result;
-    if(!db.objectStoreNames.contains("m")){
-        db.createObjectStore("m", { keyPath: "id", autoIncrement: true });
+// DB
+const req = indexedDB.open("FINAL",1);
+
+req.onupgradeneeded = e=>{
+  e.target.result.createObjectStore("m",{keyPath:"word"});
+};
+
+req.onsuccess = e=>{
+  db = e.target.result;
+};
+
+// LUMINA
+function lumina(mode){
+
+  const messages = {
+    guidance: [
+      "少しずつ、形が見えてきています。",
+      "その流れは、静かに続いています。"
+    ],
+    embrace: [
+      "その歩み、静かに保たれています。",
+      "今は、このままでも大丈夫です。"
+    ],
+    silence: [
+      "一語だけ、そっと。",
+      "ここに置いてみてください。"
+    ]
+  };
+
+  const list = messages[mode] || messages.guidance;
+  const msg = list[Math.floor(Math.random()*list.length)];
+
+  document.getElementById("lumina").innerText = msg;
+}
+
+// 出題
+function next(){
+  if(!db){ fallback(); return; }
+
+  db.transaction("m").objectStore("m").getAll().onsuccess = e=>{
+    let list = e.target.result;
+
+    if(!list.length){
+      fallback();
+      return;
     }
-};
-request.onsuccess = function(e){
-    db = e.target.result;
-    load();
-};
-request.onerror = function(e){ console.error("DBエラー", e.target.error); };
 
-// Save処理
-document.getElementById("saveBtn").addEventListener("click", save);
+    let pool = [];
+
+    list.forEach(x=>{
+      let w = Math.max(1,5-(x.count||1));
+      for(let i=0;i<w;i++) pool.push(x);
+    });
+
+    let p = pool[Math.floor(Math.random()*pool.length)];
+
+    document.getElementById("word").innerText = p.word;
+    document.getElementById("mean").innerText = p.mean;
+
+    lumina("guidance");
+  };
+}
+
+// 初期
+function fallback(){
+  let d=[{w:"A",m:"a"},{w:"B",m:"b"}];
+  let s=d[Math.floor(Math.random()*d.length)];
+
+  document.getElementById("word").innerText = s.w;
+  document.getElementById("mean").innerText = s.m;
+
+  lumina("silence");
+}
+
+// 保存
 function save(){
-    const word = document.getElementById("word").value.trim();
-    const mean = document.getElementById("mean").value.trim();
-    if(!word || !mean){ alert("両方入力してください"); return; }
+  if(!db){ alert("準備中"); return; }
 
-    const tx = db.transaction("m","readwrite");
-    const store = tx.objectStore("m");
+  let w = document.getElementById("word").innerText.toLowerCase();
+  let m = document.getElementById("mean").innerText;
 
-    store.getAll().onsuccess = function(e){
-        const exists = e.target.result.some(item => item.word === word && item.mean === mean);
-        if(exists){ alert("既に同じ単語が存在します"); return; }
+  let tx = db.transaction("m","readwrite");
+  let s = tx.objectStore("m");
 
-        store.add({word, mean});
-        tx.oncomplete = function(){
-            load();
-            document.getElementById("word").value = "";
-            document.getElementById("mean").value = "";
-        };
-        tx.onerror = function(e){ console.error("追加エラー", e.target.error); };
-    };
+  s.get(w).onsuccess = e=>{
+    let d = e.target.result || {word:w,mean:m,count:0,correct:0,incorrect:0};
+    d.count++;
+    s.put(d);
+  };
 }
 
-// load関数（重複なし + count + 編集 + 削除 + 検索 + ソート）
-function load(){
-    const tx = db.transaction("m","readonly");
-    const store = tx.objectStore("m");
-    store.getAll().onsuccess = function(e){
-        let data = e.target.result;
-
-        // 重複削除
-        const seen = new Set();
-        const unique = [];
-        data.forEach(item=>{
-            const key = item.word + "||" + item.mean;
-            if(!seen.has(key)){
-                seen.add(key);
-                unique.push(item);
-            }
-        });
-
-        // 検索フィルター
-        const searchVal = document.getElementById("search").value.trim().toLowerCase();
-        if(searchVal){
-            data = unique.filter(item=>{
-                return item.word.toLowerCase().includes(searchVal) || item.mean.toLowerCase().includes(searchVal);
-            });
-        } else {
-            data = unique;
-        }
-
-        // ソート
-        if(sortKey){
-            data.sort((a,b)=>{
-                const v1 = a[sortKey].toLowerCase();
-                const v2 = b[sortKey].toLowerCase();
-                if(v1 < v2) return sortAsc ? -1 : 1;
-                if(v1 > v2) return sortAsc ? 1 : -1;
-                return 0;
-            });
-        }
-
-        // 表示
-        const listDiv = document.getElementById("list");
-        const countDiv = document.getElementById("count");
-        listDiv.innerHTML = "";
-
-        data.forEach(item=>{
-            const div = document.createElement("div");
-
-            const wordInput = document.createElement("input");
-            wordInput.value = item.word;
-            wordInput.style.width = "120px";
-            const meanInput = document.createElement("input");
-            meanInput.value = item.mean;
-            meanInput.style.width = "120px";
-
-            // 編集保存ボタン
-            const editBtn = document.createElement("button");
-            editBtn.innerText = "Save Edit";
-            editBtn.style.marginLeft = "5px";
-            editBtn.addEventListener("click", ()=>{
-                const newWord = wordInput.value.trim();
-                const newMean = meanInput.value.trim();
-                if(!newWord || !newMean){ alert("両方入力してください"); return; }
-
-                const txCheck = db.transaction("m","readonly");
-                const storeCheck = txCheck.objectStore("m");
-                storeCheck.getAll().onsuccess = function(ev){
-                    const exists = ev.target.result.some(it =>
-                        it.id !== item.id && it.word === newWord && it.mean === newMean
-                    );
-                    if(exists){ alert("既に同じ単語が存在します"); return; }
-
-                    const txUpdate = db.transaction("m","readwrite");
-                    const storeUpdate = txUpdate.objectStore("m");
-                    storeUpdate.put({id:item.id, word:newWord, mean:newMean});
-                    txUpdate.oncomplete = load;
-                };
-            });
-
-            // 削除ボタン
-            const delBtn = document.createElement("button");
-            delBtn.innerText = "Delete";
-            delBtn.style.marginLeft = "5px";
-            delBtn.addEventListener("click", ()=>{
-                const txDel = db.transaction("m","readwrite");
-                const storeDel = txDel.objectStore("m");
-                storeDel.delete(item.id);
-                txDel.oncomplete = load;
-            });
-
-            div.appendChild(wordInput);
-            div.appendChild(meanInput);
-            div.appendChild(editBtn);
-            div.appendChild(delBtn);
-            listDiv.appendChild(div);
-        });
-
-        countDiv.innerText = "Total: " + data.length;
-    };
+// 正解
+function correct(){
+  updateAnswer(true);
+  lumina("guidance");
 }
 
-// Nextボタン
-document.getElementById("nextBtn").addEventListener("click", ()=>{
-    document.getElementById("word").value = "";
-    document.getElementById("mean").value = "";
-});
+// 不正解
+function incorrect(){
+  updateAnswer(false);
+  lumina("embrace");
+}
 
-// 検索ボックス
-document.getElementById("search").addEventListener("input", load);
+// 更新
+function updateAnswer(isCorrect){
+  if(!db){ return; }
 
-// ソートボタン
-document.getElementById("sortWordBtn").addEventListener("click", ()=>{
-    if(sortKey === 'word') sortAsc = !sortAsc;
-    else { sortKey = 'word'; sortAsc = true; }
-    load();
-});
-document.getElementById("sortMeanBtn").addEventListener("click", ()=>{
-    if(sortKey === 'mean') sortAsc = !sortAsc;
-    else { sortKey = 'mean'; sortAsc = true; }
-    load();
-});
+  let w = document.getElementById("word").innerText.toLowerCase();
+
+  let tx = db.transaction("m","readwrite");
+  let s = tx.objectStore("m");
+
+  s.get(w).onsuccess = e=>{
+    let d = e.target.result;
+    if(!d) return;
+
+    if(isCorrect){
+      d.correct = (d.correct||0)+1;
+    }else{
+      d.incorrect = (d.incorrect||0)+1;
+    }
+
+    s.put(d);
+  };
+}
 </script>
 
 </body>
