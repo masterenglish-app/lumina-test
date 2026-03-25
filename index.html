@@ -8,24 +8,52 @@
 <button onclick="next()">Next</button>
 <button onclick="save()">Save</button>
 
+<p id="status">DB準備中...</p>
+
 <script>
 const data = [
   {w:"A", m:"a"},
   {w:"B", m:"b"}
 ];
 
-let memory = [];
+let db = null;
 
+// DB初期化
+const request = indexedDB.open("LuminaSafe", 1);
+
+request.onupgradeneeded = function(e){
+  const db = e.target.result;
+  db.createObjectStore("memory", {autoIncrement:true});
+};
+
+request.onsuccess = function(e){
+  db = e.target.result;
+  document.getElementById("status").innerText = "準備完了";
+};
+
+// 単語表示
 function next(){
   const s = data[Math.floor(Math.random()*data.length)];
   document.getElementById("word").innerText = s.w;
   document.getElementById("mean").innerText = s.m;
 }
 
+// 保存（DB）
 function save(){
+  if(!db){
+    alert("準備中です");
+    return;
+  }
+
   const word = document.getElementById("word").innerText;
-  memory.push(word);
-  alert("saved: " + word);
+  const mean = document.getElementById("mean").innerText;
+
+  const tx = db.transaction("memory","readwrite");
+  const store = tx.objectStore("memory");
+
+  store.add({word, mean});
+
+  alert("保存しました");
 }
 </script>
 
