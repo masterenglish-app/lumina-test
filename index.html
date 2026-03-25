@@ -19,12 +19,12 @@ const data = [
 
 let db = null;
 
-// DB
-const request = indexedDB.open("LuminaSafe2", 1);
+// DB（wordをキー）
+const request = indexedDB.open("LuminaFinal", 1);
 
 request.onupgradeneeded = function(e){
   const db = e.target.result;
-  db.createObjectStore("memory", {autoIncrement:true});
+  db.createObjectStore("memory", {keyPath:"word"});
 };
 
 request.onsuccess = function(e){
@@ -33,32 +33,87 @@ request.onsuccess = function(e){
   load();
 };
 
+// 出題（苦手優先）
 function next(){
+  if(!db){
+    fallback();
+    return;
+  }
+
+  const tx = db.transaction("memory","readonly");
+  const store = tx.objectStore("memory");
+
+  store.getAll().onsuccess = function(e){
+    const list = e.target.result;
+
+    if(!list || list.length === 0){
+      fallback();
+      return;
+    }
+
+    let pool = [];
+
+    list.forEach(item=>{
+      let count = item.count || 1;
+      let weight = Math.max(1, 5 - count);
+
+      for(let i=0;i<weight;i++){
+        pool.push(item);
+      }
+    });
+
+    if(pool.length === 0){
+      fallback();
+      return;
+    }
+
+    const pick = pool[Math.floor(Math.random()*pool.length)];
+
+    document.getElementById("word").innerText = pick.word;
+    document.getElementById("mean").innerText = pick.mean;
+  };
+}
+
+// 初期用
+function fallback(){
   const s = data[Math.floor(Math.random()*data.length)];
   document.getElementById("word").innerText = s.w;
   document.getElementById("mean").innerText = s.m;
 }
 
+// 保存（成長）
 function save(){
   if(!db){
     alert("準備中です");
     return;
   }
 
-  const word = document.getElementById("word").innerText;
-  const mean = document.getElementById("mean").innerText;
+  const word = document.getElementById("word").innerText.trim().toLowerCase();
+  const mean = document.getElementById("mean").innerText.trim();
 
   const tx = db.transaction("memory","readwrite");
   const store = tx.objectStore("memory");
 
-  store.add({word, mean});
+  const req = store.get(word);
+
+  req.onsuccess = function(){
+    let data = req.result;
+
+    if(data){
+      data.count = (data.count || 1) + 1;
+    }else{
+      data = {word, mean, count:1};
+    }
+
+    store.put(data);
+  };
 
   tx.oncomplete = function(){
     load();
   };
 }
 
-// 一覧表示
+// 表示
 function load(){
   if(!db) return;
 
@@ -71,7 +126,8 @@ function load(){
 
     e.target.result.forEach(item=>{
       const div = document.createElement("div");
-      div.innerText = item.word + " - " + item.mean;
+      div.innerText =
+        item.word + " - " + item.mean + " (" + item.count + ")";
       list.appendChild(div);
     });
   };
