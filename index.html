@@ -11,7 +11,8 @@
 <script>
 let db;
 
-const req = indexedDB.open("SAFE",1);
+// DB
+const req = indexedDB.open("FINAL",1);
 
 req.onupgradeneeded = e=>{
   e.target.result.createObjectStore("m",{keyPath:"word"});
@@ -21,24 +22,65 @@ req.onsuccess = e=>{
   db = e.target.result;
 };
 
-// 安全next
+// 出題
 function next(){
-  alert("next動いた"); // ←まず確認
+  if(!db){
+    fallback();
+    return;
+  }
 
-  const d = [
-    {w:"A",m:"a"},
-    {w:"B",m:"b"}
-  ];
+  db.transaction("m").objectStore("m").getAll().onsuccess = e=>{
+    let list = e.target.result;
 
-  const s = d[Math.floor(Math.random()*d.length)];
+    if(!list.length){
+      fallback();
+      return;
+    }
+
+    let pool = [];
+
+    list.forEach(x=>{
+      if(!x.word || !x.mean) return;
+
+      let w = Math.max(1,5-(x.count||1));
+      for(let i=0;i<w;i++) pool.push(x);
+    });
+
+    let p = pool[Math.floor(Math.random()*pool.length)];
+
+    // 🔥 修正ポイント
+    document.getElementById("word").innerText = p.word;
+    document.getElementById("mean").innerText = p.mean;
+  };
+}
+
+// 初期
+function fallback(){
+  let d=[{w:"A",m:"a"},{w:"B",m:"b"}];
+  let s=d[Math.floor(Math.random()*d.length)];
 
   document.getElementById("word").innerText = s.w;
   document.getElementById("mean").innerText = s.m;
 }
 
-// save
+// 保存
 function save(){
-  alert("save動いた");
+  if(!db){
+    alert("準備中");
+    return;
+  }
+
+  let w = document.getElementById("word").innerText.toLowerCase();
+  let m = document.getElementById("mean").innerText;
+
+  let tx = db.transaction("m","readwrite");
+  let s = tx.objectStore("m");
+
+  s.get(w).onsuccess = e=>{
+    let d = e.target.result || {word:w,mean:m,count:0};
+    d.count++;
+    s.put(d);
+  };
 }
 </script>
 
