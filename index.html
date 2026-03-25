@@ -1,67 +1,12 @@
 <!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LUMINA MIN</title>
-<style>
-body{
-  margin:0;
-  background:#1a1a1b;
-  color:#f2f2f0;
-  text-align:center;
-  padding-top:100px;
-  font-family:sans-serif;
-}
-button{
-  margin:10px;
-  padding:10px 20px;
-  background:none;
-  border:1px solid #c5a059;
-  color:#c5a059;
-}
-#lumina{
-  color:#c5a059;
-  margin-top:20px;
-}
-</style>
-</head>
+<html>
 <body>
 
-<h2 id="word">Tap to start</h2>
-<p id="mean"></p>
-
-<button onclick="next()">Next</button>
-<button onclick="save()">Save</button>
-
-<p id="lumina"></p>
+<button onclick="test()">押して</button>
 
 <script>
-const steps = [
-  {w:"have a significant impact on", m:"big effect"},
-  {w:"play a vital role in", m:"very important role"},
-  {w:"be indispensable to", m:"absolutely necessary"}
-];
-
-let memory = [];
-
-function next(){
-  const s = steps[Math.floor(Math.random()*steps.length)];
-  document.getElementById("word").innerText = s.w;
-  document.getElementById("mean").innerText = s.m;
-
-  document.getElementById("lumina").innerText =
-    "A small light is guiding your step.";
-}
-
-function save(){
-  const word = document.getElementById("word").innerText;
-  const mean = document.getElementById("mean").innerText;
-
-  memory.push({word, mean});
-
-  document.getElementById("lumina").innerText =
-    "This step has been recorded.";
+function test(){
+  alert("OK");
 }
 </script>
 
