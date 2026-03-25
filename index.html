@@ -1,42 +1,61 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2 id="word">Tap</h2>
+<p id="mean"></p>
+
+<button onclick="next()">Next</button>
+<button onclick="save()">Save</button>
+
+<script>
+let db;
+
+indexedDB.open("LUMINA",1).onupgradeneeded = e=>{
+  e.target.result.createObjectStore("m",{keyPath:"word"});
+};
+
+indexedDB.open("LUMINA",1).onsuccess = e=>{
+  db = e.target.result;
+};
+
 function next(){
-  if(!db){
-    fallback();
-    return;
-  }
+  if(!db){fallback();return;}
+  db.transaction("m").objectStore("m").getAll().onsuccess = e=>{
+    let list = e.target.result;
+    if(!list.length){fallback();return;}
 
-  const tx = db.transaction("memory","readonly");
-  const store = tx.objectStore("memory");
-
-  store.getAll().onsuccess = function(e){
-    const list = e.target.result;
-
-    if(!list || list.length === 0){
-      fallback();
-      return;
-    }
-
-    let pool = [];
-
-    list.forEach(item=>{
-      // 🔥 壊れデータ除外
-      if(!item || !item.word || !item.mean) return;
-
-      let count = item.count || 1;
-      let weight = Math.max(1, 5 - count);
-
-      for(let i=0;i<weight;i++){
-        pool.push(item);
-      }
+    let pool=[];
+    list.forEach(x=>{
+      if(!x.word) return;
+      let w = Math.max(1,5-(x.count||1));
+      for(let i=0;i<w;i++) pool.push(x);
     });
 
-    if(pool.length === 0){
-      fallback();
-      return;
-    }
-
-    const pick = pool[Math.floor(Math.random()*pool.length)];
-
-    document.getElementById("word").innerText = pick.word;
-    document.getElementById("mean").innerText = pick.mean;
+    let p = pool[Math.floor(Math.random()*pool.length)];
+    word.innerText=p.word;
+    mean.innerText=p.mean;
   };
 }
+
+function fallback(){
+  let d=[{w:"A",m:"a"},{w:"B",m:"b"}];
+  let s=d[Math.floor(Math.random()*d.length)];
+  word.innerText=s.w;
+  mean.innerText=s.m;
+}
+
+function save(){
+  let w=word.innerText.toLowerCase();
+  let m=mean.innerText;
+
+  let tx=db.transaction("m","readwrite");
+  let s=tx.objectStore("m");
+
+  s.get(w).onsuccess=e=>{
+    let d=e.target.result||{word:w,mean:m,count:0};
+    d.count++;
+    s.put(d);
+  };
+}
+</
