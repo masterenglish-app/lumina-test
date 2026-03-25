@@ -1,36 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+</head>
+<body>
+
+<h2 id="word">Tap</h2>
+<p id="mean"></p>
+
+<button onclick="next()">Next</button>
+<button onclick="save()">Save</button>
+
+<script>
+let db;
+
+const req = indexedDB.open("SAFE2",1);
+
+req.onupgradeneeded = function(e){
+  e.target.result.createObjectStore("m",{keyPath:"word"});
+};
+
+req.onsuccess = function(e){
+  db = e.target.result;
+};
+
 function next(){
+  const d = [
+    {w:"A",m:"a"},
+    {w:"B",m:"b"}
+  ];
+  const s = d[Math.floor(Math.random()*d.length)];
+
+  document.getElementById("word").innerText = s.w;
+  document.getElementById("mean").innerText = s.m;
+}
+
+function save(){
   if(!db){
-    fallback();
+    alert("wait");
     return;
   }
 
-  db.transaction("m").objectStore("m").getAll().onsuccess = e=>{
-    let list = e.target.result;
+  const w = document.getElementById("word").innerText;
+  const m = document.getElementById("mean").innerText;
 
-    // 🔥 完全ガード
-    if(!list || list.length === 0){
-      fallback();
-      return;
-    }
+  const tx = db.transaction("m","readwrite");
+  const store = tx.objectStore("m");
 
-    let pool = [];
-
-    list.forEach(x=>{
-      if(!x || !x.word || !x.mean) return;
-
-      let w = Math.max(1,5-(x.count||1));
-      for(let i=0;i<w;i++) pool.push(x);
-    });
-
-    // 🔥 ここが重要
-    if(pool.length === 0){
-      fallback();
-      return;
-    }
-
-    let p = pool[Math.floor(Math.random()*pool.length)];
-
-    document.getElementById("word").innerText = p.word;
-    document.getElementById("mean").innerText = p.mean;
-  };
+  store.put({word:w,mean:m,count:1});
 }
+</script>
+
+</body>
+</html>
