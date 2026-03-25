@@ -1,54 +1,83 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
 <meta charset="UTF-8">
+<title>DBテスト</title>
 </head>
 <body>
 
-<h2 id="word">Tap</h2>
-<p id="mean"></p>
+<h1>単語帳</h1>
 
-<button onclick="next()">Next</button>
-<button onclick="save()">Save</button>
+<!-- 入力 -->
+<input type="text" id="word" placeholder="単語">
+<input type="text" id="mean" placeholder="意味">
+<button id="saveBtn">Save</button>
+<button id="nextBtn">Next</button>
+
+<!-- 一覧表示 -->
+<div id="list"></div>
 
 <script>
 let db;
 
-const req = indexedDB.open("SAFE2",1);
+// DB初期化
+const request = indexedDB.open("mydb", 1);
 
-req.onupgradeneeded = function(e){
-  e.target.result.createObjectStore("m",{keyPath:"word"});
+request.onupgradeneeded = function(e){
+    db = e.target.result;
+    if(!db.objectStoreNames.contains("m")){
+        db.createObjectStore("m", { keyPath: "id", autoIncrement: true });
+    }
 };
 
-req.onsuccess = function(e){
-  db = e.target.result;
+request.onsuccess = function(e){
+    db = e.target.result;
+    load(); // ページ読み込み時に一覧表示
 };
 
-function next(){
-  const d = [
-    {w:"A",m:"a"},
-    {w:"B",m:"b"}
-  ];
-  const s = d[Math.floor(Math.random()*d.length)];
+request.onerror = function(e){
+    console.error("DBエラー", e.target.error);
+};
 
-  document.getElementById("word").innerText = s.w;
-  document.getElementById("mean").innerText = s.m;
-}
-
+// Save処理
+document.getElementById("saveBtn").addEventListener("click", save);
 function save(){
-  if(!db){
-    alert("wait");
-    return;
-  }
+    const word = document.getElementById("word").value.trim();
+    const mean = document.getElementById("mean").value.trim();
+    if(!word || !mean){ alert("両方入力してください"); return; }
 
-  const w = document.getElementById("word").innerText;
-  const m = document.getElementById("mean").innerText;
-
-  const tx = db.transaction("m","readwrite");
-  const store = tx.objectStore("m");
-
-  store.put({word:w,mean:m,count:1});
+    const tx = db.transaction("m","readwrite");
+    const store = tx.objectStore("m");
+    store.add({word, mean});
+    
+    tx.oncomplete = function(){
+        load(); // 保存後に一覧更新
+        document.getElementById("word").value = "";
+        document.getElementById("mean").value = "";
+    };
+    tx.onerror = function(e){ console.error("追加エラー", e.target.error); };
 }
+
+// 一覧表示
+function load(){
+    const tx = db.transaction("m","readonly");
+    const store = tx.objectStore("m");
+    store.getAll().onsuccess = function(e){
+        const list = document.getElementById("list");
+        list.innerHTML = "";
+        e.target.result.forEach(item=>{
+            const div = document.createElement("div");
+            div.innerText = item.word + " - " + item.mean;
+            list.appendChild(div);
+        });
+    };
+}
+
+// Nextボタンは仮で次の単語クリア
+document.getElementById("nextBtn").addEventListener("click", ()=>{
+    document.getElementById("word").value = "";
+    document.getElementById("mean").value = "";
+});
 </script>
 
 </body>
