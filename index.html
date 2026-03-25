@@ -11,51 +11,36 @@
 <script>
 let db;
 
-indexedDB.open("LUMINA",1).onupgradeneeded = e=>{
+const req = indexedDB.open("SAFE",1);
+
+req.onupgradeneeded = e=>{
   e.target.result.createObjectStore("m",{keyPath:"word"});
 };
 
-indexedDB.open("LUMINA",1).onsuccess = e=>{
+req.onsuccess = e=>{
   db = e.target.result;
 };
 
+// 安全next
 function next(){
-  if(!db){fallback();return;}
-  db.transaction("m").objectStore("m").getAll().onsuccess = e=>{
-    let list = e.target.result;
-    if(!list.length){fallback();return;}
+  alert("next動いた"); // ←まず確認
 
-    let pool=[];
-    list.forEach(x=>{
-      if(!x.word) return;
-      let w = Math.max(1,5-(x.count||1));
-      for(let i=0;i<w;i++) pool.push(x);
-    });
+  const d = [
+    {w:"A",m:"a"},
+    {w:"B",m:"b"}
+  ];
 
-    let p = pool[Math.floor(Math.random()*pool.length)];
-    word.innerText=p.word;
-    mean.innerText=p.mean;
-  };
+  const s = d[Math.floor(Math.random()*d.length)];
+
+  document.getElementById("word").innerText = s.w;
+  document.getElementById("mean").innerText = s.m;
 }
 
-function fallback(){
-  let d=[{w:"A",m:"a"},{w:"B",m:"b"}];
-  let s=d[Math.floor(Math.random()*d.length)];
-  word.innerText=s.w;
-  mean.innerText=s.m;
-}
-
+// save
 function save(){
-  let w=word.innerText.toLowerCase();
-  let m=mean.innerText;
-
-  let tx=db.transaction("m","readwrite");
-  let s=tx.objectStore("m");
-
-  s.get(w).onsuccess=e=>{
-    let d=e.target.result||{word:w,mean:m,count:0};
-    d.count++;
-    s.put(d);
-  };
+  alert("save動いた");
 }
-</
+</script>
+
+</body>
+</html>
