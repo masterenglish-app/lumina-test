@@ -9,6 +9,7 @@
 <button onclick="save()">Save</button>
 
 <p id="status">DB準備中...</p>
+<div id="list"></div>
 
 <script>
 const data = [
@@ -18,8 +19,8 @@ const data = [
 
 let db = null;
 
-// DB初期化
-const request = indexedDB.open("LuminaSafe", 1);
+// DB
+const request = indexedDB.open("LuminaSafe2", 1);
 
 request.onupgradeneeded = function(e){
   const db = e.target.result;
@@ -29,16 +30,15 @@ request.onupgradeneeded = function(e){
 request.onsuccess = function(e){
   db = e.target.result;
   document.getElementById("status").innerText = "準備完了";
+  load();
 };
 
-// 単語表示
 function next(){
   const s = data[Math.floor(Math.random()*data.length)];
   document.getElementById("word").innerText = s.w;
   document.getElementById("mean").innerText = s.m;
 }
 
-// 保存（DB）
 function save(){
   if(!db){
     alert("準備中です");
@@ -53,7 +53,28 @@ function save(){
 
   store.add({word, mean});
 
-  alert("保存しました");
+  tx.oncomplete = function(){
+    load();
+  };
+}
+
+// 一覧表示
+function load(){
+  if(!db) return;
+
+  const tx = db.transaction("memory","readonly");
+  const store = tx.objectStore("memory");
+
+  store.getAll().onsuccess = function(e){
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+
+    e.target.result.forEach(item=>{
+      const div = document.createElement("div");
+      div.innerText = item.word + " - " + item.mean;
+      list.appendChild(div);
+    });
+  };
 }
 </script>
 
