@@ -1,12 +1,22 @@
 <!DOCTYPE html>
 <html>
-<body>
+<body style="background:#111;color:#fff;text-align:center;padding-top:80px;">
 
-<button onclick="test()">押して</button>
+<h2 id="word">Tap</h2>
+<p id="mean"></p>
+
+<button onclick="next()">Next</button>
 
 <script>
-function test(){
-  alert("OK");
+const data = [
+  {w:"A", m:"a"},
+  {w:"B", m:"b"}
+];
+
+function next(){
+  const s = data[Math.floor(Math.random()*data.length)];
+  document.getElementById("word").innerText = s.w;
+  document.getElementById("mean").innerText = s.m;
 }
 </script>
 
