@@ -6,6 +6,7 @@
 <p id="mean"></p>
 
 <button onclick="next()">Next</button>
+<button onclick="save()">Save</button>
 
 <script>
 const data = [
@@ -13,10 +14,18 @@ const data = [
   {w:"B", m:"b"}
 ];
 
+let memory = [];
+
 function next(){
   const s = data[Math.floor(Math.random()*data.length)];
   document.getElementById("word").innerText = s.w;
   document.getElementById("mean").innerText = s.m;
+}
+
+function save(){
+  const word = document.getElementById("word").innerText;
+  memory.push(word);
+  alert("saved: " + word);
 }
 </script>
 
