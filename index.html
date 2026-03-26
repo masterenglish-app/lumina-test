@@ -1,5 +1,47 @@
 <!DOCTYPE html>
 <html>
+<head>
+<meta charset="UTF-8">
+<style>
+body{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  height:100vh;
+  font-family:sans-serif;
+  background:#f9f9f9;
+}
+
+#word{
+  font-size:42px;
+  margin:10px;
+}
+
+#mean{
+  font-size:18px;
+  color:#666;
+}
+
+#hint{
+  margin-top:15px;
+  white-space:pre-line;
+  color:#333;
+}
+
+textarea{
+  margin-top:20px;
+  width:80%;
+  height:60px;
+}
+
+button{
+  margin:5px;
+  padding:10px;
+}
+</style>
+</head>
+
 <body>
 
 <h2 id="word">Tap</h2>
@@ -12,11 +54,16 @@
 <button onclick="save()">Save</button>
 <button onclick="correct()">Correct</button>
 <button onclick="incorrect()">Incorrect</button>
-<button onclick="saveStory()">Story Save</button>
+<button onclick="saveStory()">Story</button>
 
 <script>
 // =======================
-// 🔹 DB
+// 🔐 API KEY（自分のキーに変更）
+// =======================
+const API_KEY = "AIzaSyDk3tkI8M9-tithyLWdnJZgFC6C-hC0Jis";
+
+// =======================
+// DB
 // =======================
 let db;
 
@@ -31,12 +78,67 @@ req.onsuccess = e=>{
 };
 
 // =======================
-// 🔹 状態
+// 状態
 // =======================
 let lastStory = "";
 
 // =======================
-// 🔹 Next（忘却＋時間）
+// AI
+// =======================
+async function askAI(text){
+  try{
+    const res = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key="+API_KEY,
+      {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          contents:[{ parts:[{text:text}] }]
+        })
+      }
+    );
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  }catch(e){
+    return "";
+  }
+}
+
+// =======================
+// LUMINA
+// =======================
+async function lumina(mode){
+
+  let base = document.getElementById("hint").innerText;
+
+  let prompt = "";
+
+  if(mode==="guidance"){
+    prompt = `
+Refine this into natural, short, calm English.
+Do not explain.
+
+${base}
+`;
+  }
+
+  if(mode==="embrace"){
+    prompt = `
+Gently comfort. Do not teach.
+
+${base}
+`;
+  }
+
+  let reply = await askAI(prompt);
+
+  if(reply){
+    document.getElementById("hint").innerText = reply;
+  }
+}
+
+// =======================
+// Next（忘却＋時間）
 // =======================
 function next(){
   if(!db){ fallback(); return; }
@@ -53,23 +155,15 @@ function next(){
     let pool = [];
 
     list.forEach(x=>{
-      let correct = x.correct || 0;
-      let incorrect = x.incorrect || 0;
-      let last = x.last || 0;
-
-      let diff = (now - last) / 1000;
-
       let weight =
-        1
-        + incorrect * 2
-        - correct
-        + Math.floor(diff / 30);
+        1 +
+        (x.incorrect||0)*2 -
+        (x.correct||0) +
+        Math.floor((now-(x.last||0))/30000);
 
       weight = Math.max(1, weight);
 
-      for(let i=0;i<weight;i++){
-        pool.push(x);
-      }
+      for(let i=0;i<weight;i++) pool.push(x);
     });
 
     let p = pool[Math.floor(Math.random()*pool.length)];
@@ -77,13 +171,12 @@ function next(){
     document.getElementById("word").innerText = p.word;
     document.getElementById("mean").innerText = p.mean;
 
-    showHint("", "");
-    lumina("guidance");
+    document.getElementById("hint").innerText = "";
   };
 }
 
 // =======================
-// 🔹 fallback
+// fallback
 // =======================
 function fallback(){
   let d=[{w:"apple",m:"りんご"},{w:"book",m:"本"}];
@@ -94,7 +187,7 @@ function fallback(){
 }
 
 // =======================
-// 🔹 Save
+// Save
 // =======================
 function save(){
   if(!db){ alert("準備中"); return; }
@@ -107,12 +200,7 @@ function save(){
 
   s.get(w).onsuccess = e=>{
     let d = e.target.result || {
-      word:w,
-      mean:m,
-      count:0,
-      correct:0,
-      incorrect:0,
-      last:0
+      word:w, mean:m, count:0, correct:0, incorrect:0, last:0
     };
 
     d.count++;
@@ -123,7 +211,7 @@ function save(){
 }
 
 // =======================
-// 🔹 Answer更新
+// Answer
 // =======================
 function updateAnswer(isCorrect){
   if(!db) return;
@@ -137,11 +225,8 @@ function updateAnswer(isCorrect){
     let d = e.target.result;
     if(!d) return;
 
-    if(isCorrect){
-      d.correct = (d.correct||0)+1;
-    }else{
-      d.incorrect = (d.incorrect||0)+1;
-    }
+    if(isCorrect) d.correct++;
+    else d.incorrect++;
 
     d.last = Date.now();
 
@@ -150,22 +235,20 @@ function updateAnswer(isCorrect){
 }
 
 // =======================
-// 🔹 Correct / Incorrect
+// Correct / Incorrect
 // =======================
 function correct(){
   updateAnswer(true);
 
   let base = generateFromStory();
-
   if(!base){
     let w = document.getElementById("word").innerText;
-    base = generateSentence(w);
+    base = "I use " + w + ".";
   }
 
-  let q = generateQuestion(base);
+  let q = base.replace(/^I /,"Do you ").replace(/\./,"?");
 
-  document.getElementById("hint").innerText =
-    base + "\n" + q;
+  document.getElementById("hint").innerText = base + "\n" + q;
 
   lumina("guidance");
 }
@@ -174,56 +257,24 @@ function incorrect(){
   updateAnswer(false);
 
   let w = document.getElementById("word").innerText;
-  showHint("incorrect", w);
+
+  document.getElementById("hint").innerText =
+    "ゆっくり見直してみましょう: " + w;
 
   lumina("embrace");
 }
 
 // =======================
-// 🔹 Hint
-// =======================
-function showHint(type, word){
-  const hint = document.getElementById("hint");
-
-  if(type==="incorrect"){
-    hint.innerText = "ゆっくり見直してみましょう： " + word;
-  }else{
-    hint.innerText = "";
-  }
-}
-
-// =======================
-// 🔹 Sentence生成
-// =======================
-function generateSentence(word){
-  const t = [
-    "I use " + word + ".",
-    "I like " + word + ".",
-    "I saw " + word + " today."
-  ];
-  return t[Math.floor(Math.random()*t.length)];
-}
-
-// =======================
-// 🔹 質問生成
-// =======================
-function generateQuestion(sentence){
-  return sentence
-    .replace(/^I /,"Do you ")
-    .replace(/\.$/,"?");
-}
-
-// =======================
-// 🔹 Story保存
+// Story
 // =======================
 function saveStory(){
-  const text = document.getElementById("story").value;
+  let text = document.getElementById("story").value;
   if(!text) return;
 
   lastStory = text;
 
-  const clean = text.toLowerCase().replace(/[.,!?]/g,"");
-  const words = clean.split(/\s+/);
+  let clean = text.toLowerCase().replace(/[.,!?]/g,"");
+  let words = clean.split(/\s+/);
 
   let tx = db.transaction("m","readwrite");
   let s = tx.objectStore("m");
@@ -233,11 +284,7 @@ function saveStory(){
 
     s.get(w).onsuccess = e=>{
       let d = e.target.result || {
-        word:w,
-        mean:"(word)",
-        count:0,
-        correct:0,
-        incorrect:0
+        word:w, mean:"(word)", count:0, correct:0, incorrect:0
       };
       d.count++;
       s.put(d);
@@ -246,43 +293,23 @@ function saveStory(){
 }
 
 // =======================
-// 🔹 軽い補正
+// 軽い補正
 // =======================
 function softCorrect(text){
   let s = text.trim().toLowerCase();
-
   s = s.replace(/\bi go school\b/g,"i go to school");
 
   s = s.charAt(0).toUpperCase()+s.slice(1);
-
   if(!s.endsWith(".")) s+=".";
 
   return s;
 }
 
-// =======================
-// 🔹 Story生成
-// =======================
 function generateFromStory(){
   if(!lastStory) return "";
   return softCorrect(lastStory);
 }
 
-// =======================
-// 🔹 LUMINA（簡易）
-// =======================
-function lumina(mode){
-  const hint = document.getElementById("hint");
-
-  if(mode==="guidance"){
-    // 控えめ
-  }
-  if(mode==="embrace"){
-    hint.innerText += "\n少しずつで大丈夫です。";
-  }
-}
-
 </script>
-
 </body>
 </html>
