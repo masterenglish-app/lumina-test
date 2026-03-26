@@ -4,28 +4,23 @@
 
 <h2 id="word">Tap</h2>
 <p id="mean"></p>
-<p id="lumina"></p>
+<p id="hint"></p>
 
-<textarea id="story" placeholder="一文、そっと置いてみてください"></textarea><br>
-<button onclick="saveStory()">記録</button>
-
-<br><br>
+<textarea id="story" placeholder="Write your story..."></textarea><br>
 
 <button onclick="next()">Next</button>
 <button onclick="save()">Save</button>
 <button onclick="correct()">Correct</button>
 <button onclick="incorrect()">Incorrect</button>
-
-<br><br>
-
-<button onclick="toggleLog()">静かな記録</button>
-<div id="log" style="display:none;"></div>
+<button onclick="saveStory()">Story Save</button>
 
 <script>
+// =======================
+// 🔹 DB
+// =======================
 let db;
 
-// DB初期化
-const req = indexedDB.open("FINAL",1);
+const req = indexedDB.open("MASTER",1);
 
 req.onupgradeneeded = e=>{
   e.target.result.createObjectStore("m",{keyPath:"word"});
@@ -35,31 +30,14 @@ req.onsuccess = e=>{
   db = e.target.result;
 };
 
-// LUMINA
-function lumina(mode){
+// =======================
+// 🔹 状態
+// =======================
+let lastStory = "";
 
-  const messages = {
-    guidance: [
-      "少しずつ、形が見えてきています。",
-      "その流れは、静かに続いています。"
-    ],
-    embrace: [
-      "その歩み、静かに保たれています。",
-      "今は、このままでも大丈夫です。"
-    ],
-    silence: [
-      "一語だけ、そっと。",
-      "ここに置いてみてください。"
-    ]
-  };
-
-  const list = messages[mode] || messages.guidance;
-  const msg = list[Math.floor(Math.random()*list.length)];
-
-  document.getElementById("lumina").innerText = msg;
-}
-
-// 出題
+// =======================
+// 🔹 Next（忘却＋時間）
+// =======================
 function next(){
   if(!db){ fallback(); return; }
 
@@ -71,11 +49,27 @@ function next(){
       return;
     }
 
+    let now = Date.now();
     let pool = [];
 
     list.forEach(x=>{
-      let w = Math.max(1,5-(x.count||1));
-      for(let i=0;i<w;i++) pool.push(x);
+      let correct = x.correct || 0;
+      let incorrect = x.incorrect || 0;
+      let last = x.last || 0;
+
+      let diff = (now - last) / 1000;
+
+      let weight =
+        1
+        + incorrect * 2
+        - correct
+        + Math.floor(diff / 30);
+
+      weight = Math.max(1, weight);
+
+      for(let i=0;i<weight;i++){
+        pool.push(x);
+      }
     });
 
     let p = pool[Math.floor(Math.random()*pool.length)];
@@ -83,22 +77,25 @@ function next(){
     document.getElementById("word").innerText = p.word;
     document.getElementById("mean").innerText = p.mean;
 
+    showHint("", "");
     lumina("guidance");
   };
 }
 
-// 初期表示
+// =======================
+// 🔹 fallback
+// =======================
 function fallback(){
-  let d=[{w:"A",m:"a"},{w:"B",m:"b"}];
+  let d=[{w:"apple",m:"りんご"},{w:"book",m:"本"}];
   let s=d[Math.floor(Math.random()*d.length)];
 
   document.getElementById("word").innerText = s.w;
   document.getElementById("mean").innerText = s.m;
-
-  lumina("silence");
 }
 
-// 保存
+// =======================
+// 🔹 Save
+// =======================
 function save(){
   if(!db){ alert("準備中"); return; }
 
@@ -109,27 +106,27 @@ function save(){
   let s = tx.objectStore("m");
 
   s.get(w).onsuccess = e=>{
-    let d = e.target.result || {word:w,mean:m,count:0,correct:0,incorrect:0};
+    let d = e.target.result || {
+      word:w,
+      mean:m,
+      count:0,
+      correct:0,
+      incorrect:0,
+      last:0
+    };
+
     d.count++;
+    d.last = Date.now();
+
     s.put(d);
   };
 }
 
-// 正解
-function correct(){
-  updateAnswer(true);
-  lumina("guidance");
-}
-
-// 不正解
-function incorrect(){
-  updateAnswer(false);
-  lumina("embrace");
-}
-
-// 更新
+// =======================
+// 🔹 Answer更新
+// =======================
 function updateAnswer(isCorrect){
-  if(!db){ return; }
+  if(!db) return;
 
   let w = document.getElementById("word").innerText.toLowerCase();
 
@@ -146,74 +143,145 @@ function updateAnswer(isCorrect){
       d.incorrect = (d.incorrect||0)+1;
     }
 
+    d.last = Date.now();
+
     s.put(d);
   };
 }
 
-// Story保存
+// =======================
+// 🔹 Correct / Incorrect
+// =======================
+function correct(){
+  updateAnswer(true);
+
+  let base = generateFromStory();
+
+  if(!base){
+    let w = document.getElementById("word").innerText;
+    base = generateSentence(w);
+  }
+
+  let q = generateQuestion(base);
+
+  document.getElementById("hint").innerText =
+    base + "\n" + q;
+
+  lumina("guidance");
+}
+
+function incorrect(){
+  updateAnswer(false);
+
+  let w = document.getElementById("word").innerText;
+  showHint("incorrect", w);
+
+  lumina("embrace");
+}
+
+// =======================
+// 🔹 Hint
+// =======================
+function showHint(type, word){
+  const hint = document.getElementById("hint");
+
+  if(type==="incorrect"){
+    hint.innerText = "ゆっくり見直してみましょう： " + word;
+  }else{
+    hint.innerText = "";
+  }
+}
+
+// =======================
+// 🔹 Sentence生成
+// =======================
+function generateSentence(word){
+  const t = [
+    "I use " + word + ".",
+    "I like " + word + ".",
+    "I saw " + word + " today."
+  ];
+  return t[Math.floor(Math.random()*t.length)];
+}
+
+// =======================
+// 🔹 質問生成
+// =======================
+function generateQuestion(sentence){
+  return sentence
+    .replace(/^I /,"Do you ")
+    .replace(/\.$/,"?");
+}
+
+// =======================
+// 🔹 Story保存
+// =======================
 function saveStory(){
   const text = document.getElementById("story").value;
   if(!text) return;
 
-  let words = text
-    .toLowerCase()
-    .replace(/[.,!?]/g,"")
-    .split(/\s+/);
+  lastStory = text;
+
+  const clean = text.toLowerCase().replace(/[.,!?]/g,"");
+  const words = clean.split(/\s+/);
 
   let tx = db.transaction("m","readwrite");
   let s = tx.objectStore("m");
 
   words.forEach(w=>{
-    if(!w || w.length < 2) return;
+    if(!w || w.length<2) return;
 
     s.get(w).onsuccess = e=>{
       let d = e.target.result || {
         word:w,
-        mean:"(from story)",
+        mean:"(word)",
         count:0,
         correct:0,
         incorrect:0
       };
-
       d.count++;
-
       s.put(d);
     };
   });
-
-  lumina("guidance");
 }
 
-// 記録表示
-function toggleLog(){
-  const log = document.getElementById("log");
+// =======================
+// 🔹 軽い補正
+// =======================
+function softCorrect(text){
+  let s = text.trim().toLowerCase();
 
-  if(log.style.display === "none"){
-    loadLog();
-    log.style.display = "block";
-    document.getElementById("lumina").innerText =
-      "ここまでの足跡が、静かに残されています。";
-  }else{
-    log.style.display = "none";
+  s = s.replace(/\bi go school\b/g,"i go to school");
+
+  s = s.charAt(0).toUpperCase()+s.slice(1);
+
+  if(!s.endsWith(".")) s+=".";
+
+  return s;
+}
+
+// =======================
+// 🔹 Story生成
+// =======================
+function generateFromStory(){
+  if(!lastStory) return "";
+  return softCorrect(lastStory);
+}
+
+// =======================
+// 🔹 LUMINA（簡易）
+// =======================
+function lumina(mode){
+  const hint = document.getElementById("hint");
+
+  if(mode==="guidance"){
+    // 控えめ
+  }
+  if(mode==="embrace"){
+    hint.innerText += "\n少しずつで大丈夫です。";
   }
 }
 
-function loadLog(){
-  if(!db) return;
-
-  db.transaction("m").objectStore("m").getAll().onsuccess = e=>{
-    const list = e.target.result;
-    const log = document.getElementById("log");
-
-    log.innerHTML = "";
-
-    list.forEach(item=>{
-      const div = document.createElement("div");
-      div.innerText = item.word + " - " + item.mean;
-      log.appendChild(div);
-    });
-  };
-}
 </script>
 
 </body>
