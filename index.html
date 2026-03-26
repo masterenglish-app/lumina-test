@@ -155,21 +155,30 @@ function saveStory(){
   const text = document.getElementById("story").value;
   if(!text) return;
 
-  let words = text.split(" ");
+  let words = text
+    .toLowerCase()
+    .replace(/[.,!?]/g,"")
+    .split(/\s+/);
 
   let tx = db.transaction("m","readwrite");
   let s = tx.objectStore("m");
 
   words.forEach(w=>{
-    if(!w) return;
+    if(!w || w.length < 2) return;
 
-    s.put({
-      word:w.toLowerCase(),
-      mean:"(from story)",
-      count:1,
-      correct:0,
-      incorrect:0
-    });
+    s.get(w).onsuccess = e=>{
+      let d = e.target.result || {
+        word:w,
+        mean:"(from story)",
+        count:0,
+        correct:0,
+        incorrect:0
+      };
+
+      d.count++;
+
+      s.put(d);
+    };
   });
 
   lumina("guidance");
