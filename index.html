@@ -6,15 +6,25 @@
 <p id="mean"></p>
 <p id="lumina"></p>
 
+<textarea id="story" placeholder="一文、そっと置いてみてください"></textarea><br>
+<button onclick="saveStory()">記録</button>
+
+<br><br>
+
 <button onclick="next()">Next</button>
 <button onclick="save()">Save</button>
 <button onclick="correct()">Correct</button>
 <button onclick="incorrect()">Incorrect</button>
 
+<br><br>
+
+<button onclick="toggleLog()">静かな記録</button>
+<div id="log" style="display:none;"></div>
+
 <script>
 let db;
 
-// DB
+// DB初期化
 const req = indexedDB.open("FINAL",1);
 
 req.onupgradeneeded = e=>{
@@ -77,7 +87,7 @@ function next(){
   };
 }
 
-// 初期
+// 初期表示
 function fallback(){
   let d=[{w:"A",m:"a"},{w:"B",m:"b"}];
   let s=d[Math.floor(Math.random()*d.length)];
@@ -137,6 +147,62 @@ function updateAnswer(isCorrect){
     }
 
     s.put(d);
+  };
+}
+
+// Story保存
+function saveStory(){
+  const text = document.getElementById("story").value;
+  if(!text) return;
+
+  let words = text.split(" ");
+
+  let tx = db.transaction("m","readwrite");
+  let s = tx.objectStore("m");
+
+  words.forEach(w=>{
+    if(!w) return;
+
+    s.put({
+      word:w.toLowerCase(),
+      mean:"(from story)",
+      count:1,
+      correct:0,
+      incorrect:0
+    });
+  });
+
+  lumina("guidance");
+}
+
+// 記録表示
+function toggleLog(){
+  const log = document.getElementById("log");
+
+  if(log.style.display === "none"){
+    loadLog();
+    log.style.display = "block";
+    document.getElementById("lumina").innerText =
+      "ここまでの足跡が、静かに残されています。";
+  }else{
+    log.style.display = "none";
+  }
+}
+
+function loadLog(){
+  if(!db) return;
+
+  db.transaction("m").objectStore("m").getAll().onsuccess = e=>{
+    const list = e.target.result;
+    const log = document.getElementById("log");
+
+    log.innerHTML = "";
+
+    list.forEach(item=>{
+      const div = document.createElement("div");
+      div.innerText = item.word + " - " + item.mean;
+      log.appendChild(div);
+    });
   };
 }
 </script>
